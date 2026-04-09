@@ -1,0 +1,47 @@
+﻿const jwt = require('jsonwebtoken');
+
+// Simple in-memory user for testing
+const USERS = [
+    { id: 1, username: 'admin', password: 'admin123', email: 'admin@inventory.com', role_id: 1, role_name: 'admin' }
+];
+
+const login = async (req, res) => {
+    const { username, password } = req.body;
+    
+    console.log('Login attempt:', username, password);
+    
+    const user = USERS.find(u => u.username === username && u.password === password);
+    
+    if (!user) {
+        return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    }
+    
+    const token = jwt.sign(
+        { id: user.id, username: user.username, role_id: user.role_id },
+        process.env.JWT_SECRET || 'secret',
+        { expiresIn: process.env.JWT_EXPIRE || '7d' }
+    );
+    
+    res.json({
+        success: true,
+        message: 'Login successful',
+        token: token,
+        user: {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            role_id: user.role_id,
+            role_name: user.role_name
+        }
+    });
+};
+
+const register = async (req, res) => {
+    res.json({ success: true, message: 'Registration endpoint' });
+};
+
+const getCurrentUser = async (req, res) => {
+    res.json({ success: true, user: req.user });
+};
+
+module.exports = { register, login, getCurrentUser };
