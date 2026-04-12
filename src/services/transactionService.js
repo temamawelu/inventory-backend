@@ -40,13 +40,7 @@ class TransactionService {
     }
 
     async getTransactionHistory(productId = null, limit = 100) {
-        let query = 
-            SELECT it.*, p.name as product_name, p.sku, tt.name as transaction_type_name, u.username as user_name
-            FROM inventory_transactions it
-            JOIN products p ON it.product_id = p.id
-            JOIN transaction_types tt ON it.transaction_type_id = tt.id
-            JOIN users u ON it.user_id = u.id
-        ;
+        let query = 'SELECT it.*, p.name as product_name, p.sku, tt.name as transaction_type_name, u.username as user_name FROM inventory_transactions it JOIN products p ON it.product_id = p.id JOIN transaction_types tt ON it.transaction_type_id = tt.id JOIN users u ON it.user_id = u.id';
         const params = [];
 
         if (productId) {

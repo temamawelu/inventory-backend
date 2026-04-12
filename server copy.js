@@ -25,6 +25,7 @@ const pool = mysql.createPool({
     queueLimit: 0
 });
 
+// Make pool available globally
 global.db = pool;
 
 const testDb = async () => {
@@ -48,7 +49,9 @@ const transactionRoutes = require('./src/routes/transactionRoutes');
 const userRoutes = require('./src/routes/userRoutes');
 const profileRoutes = require('./src/routes/profileRoutes');
 const supplierRoutes = require('./src/routes/supplierRoutes');
+const auditLogRoutes = require('./src/routes/auditLogRoutes');
 const exportRoutes = require('./src/routes/exportRoutes');
+
 
 // ============================================
 // REGISTER ROUTES
@@ -60,6 +63,7 @@ app.use('/api/transactions', transactionRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/suppliers', supplierRoutes);
+app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/export', exportRoutes);
 
 // ============================================
@@ -87,33 +91,38 @@ app.get('/api/dashboard', async (req, res) => {
 });
 
 // ============================================
-// SIMPLE EMAIL TEST ENDPOINT (GET method for easy testing)
+// HEALTH CHECK
 // ============================================
-app.get('/api/test-email', async (req, res) => {
-    try {
-        const emailService = require('./src/services/emailService');
-        const email = req.query.email;
-        
-        if (!email) {
-            return res.status(400).json({ success: false, message: 'Email address required. Use ?email=your@email.com' });
+app.get('/api/health', (req, res) => {
+    res.json({ success: true, status: 'OK', timestamp: new Date().toISOString() });
+});
+
+app.get('/', (req, res) => {
+    res.json({
+        success: true,
+        message: 'Web Based Inventory Management System API',
+        version: '3.0.0',
+        database: 'MySQL',
+        endpoints: {
+            auth: '/api/auth',
+            categories: '/api/categories',
+            products: '/api/products',
+            transactions: '/api/transactions',
+            dashboard: '/api/dashboard',
+            users: '/api/users',
+            profile: '/api/profile',
+            suppliers: '/api/suppliers'
         }
-        
-        console.log('Sending test email to:', email);
-        const result = await emailService.sendTestEmail(email);
-        
-        if (result) {
-            res.json({ success: true, message: 'Test email sent successfully! Check your inbox.' });
-        } else {
-            res.status(500).json({ success: false, message: 'Failed to send email. Check email configuration.' });
-        }
-    } catch (error) {
-        console.error('Test email error:', error);
-        res.status(500).json({ success: false, message: error.message });
-    }
+    });
 });
 
 // ============================================
-// POST method for test email (for compatibility)
+// START SERVER
+// ============================================
+const PORT = process.env.PORT || 5000;
+// Test email endpoint
+// ============================================
+// TEST EMAIL ENDPOINT
 // ============================================
 app.post('/api/test-email', async (req, res) => {
     try {
@@ -128,7 +137,7 @@ app.post('/api/test-email', async (req, res) => {
         const result = await emailService.sendTestEmail(email);
         
         if (result) {
-            res.json({ success: true, message: 'Test email sent successfully! Check your inbox.' });
+            res.json({ success: true, message: 'Test email sent successfully!' });
         } else {
             res.status(500).json({ success: false, message: 'Failed to send email. Check email configuration.' });
         }
@@ -138,13 +147,13 @@ app.post('/api/test-email', async (req, res) => {
     }
 });
 
-// ============================================
-// SIMPLE LOW STOCK ALERT TEST (GET method)
-// ============================================
-app.get('/api/test-low-stock-alert', async (req, res) => {
+// Manual low stock alert test
+app.post('/api/test-low-stock-alert', async (req, res) => {
     try {
         const emailService = require('./src/services/emailService');
+        const pool = require('./src/config/database');
         
+        // Get admin email
         const [admins] = await pool.query('SELECT email FROM users WHERE role_id = 1 LIMIT 1');
         
         if (admins.length === 0) {
@@ -154,6 +163,7 @@ app.get('/api/test-low-stock-alert', async (req, res) => {
         const adminEmail = admins[0].email;
         console.log('Admin email:', adminEmail);
         
+        // Get low stock products
         const [lowStock] = await pool.query('SELECT * FROM products WHERE quantity_on_hand <= reorder_point LIMIT 1');
         
         if (lowStock.length === 0) {
@@ -170,35 +180,7 @@ app.get('/api/test-low-stock-alert', async (req, res) => {
     }
 });
 
-// ============================================
-// HEALTH CHECK
-// ============================================
-app.get('/api/health', (req, res) => {
-    res.json({ success: true, status: 'OK', timestamp: new Date().toISOString() });
-});
-
-app.get('/', (req, res) => {
-    res.json({
-        success: true,
-        message: 'Web Based Inventory Management System API',
-        version: '3.0.0',
-        testEmail: 'GET /api/test-email?email=your@email.com',
-        testLowStock: 'GET /api/test-low-stock-alert',
-        endpoints: {
-            auth: '/api/auth',
-            categories: '/api/categories',
-            products: '/api/products',
-            transactions: '/api/transactions',
-            suppliers: '/api/suppliers',
-            dashboard: '/api/dashboard',
-            export: '/api/export'
-        }
-    });
-});
-
-const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-    console.log('🚀 Server running on http://localhost:' + PORT);
-    console.log('📧 Test email: GET http://localhost:' + PORT + '/api/test-email?email=your@email.com');
-    console.log('⚠️ Test low stock: GET http://localhost:' + PORT + '/api/test-low-stock-alert');
+    console.log('Server running on http://localhost:' + PORT);
+    console.log('Database: MySQL');
 });
