@@ -1,123 +1,7 @@
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
+﻿const bcrypt = require('bcryptjs');
 const userRepository = require('../repositories/userRepository');
 
 class UserService {
-    async register(username, email, password, fullName = null, phone = null) {
-        // Check if user exists
-        const existingUser = await userRepository.findByUsername(username);
-        if (existingUser) {
-            throw new Error('Username already exists');
-        }
-
-        const existingEmail = await userRepository.findByEmail(email);
-        if (existingEmail) {
-            throw new Error('Email already exists');
-        }
-
-        // Hash password
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
-
-        // Create user (role_id = 2 for regular user)
-        const userId = await userRepository.create([
-            username, email, hashedPassword, 2, fullName, phone
-        ]);
-
-        // Generate token
-        const token = jwt.sign(
-            { id: userId, username: username, role_id: 2 },
-            process.env.JWT_SECRET || 'secret',
-            { expiresIn: '7d' }
-        );
-
-        return {
-            token,
-            user: {
-                id: userId,
-                username: username,
-                email: email,
-                full_name: fullName,
-                phone: phone,
-                role_id: 2,
-                role_name: 'user'
-            }
-        };
-    }
-
-    async login(username, password) {
-        const user = await userRepository.findByUsername(username);
-        
-        if (!user) {
-            throw new Error('Invalid credentials');
-        }
-
-        const isValid = await bcrypt.compare(password, user.password_hash);
-        if (!isValid) {
-            throw new Error('Invalid credentials');
-        }
-
-        await userRepository.updateLastLogin(user.id);
-
-        const token = jwt.sign(
-            { id: user.id, username: user.username, role_id: user.role_id },
-            process.env.JWT_SECRET || 'secret',
-            { expiresIn: '7d' }
-        );
-
-        return {
-            token,
-            user: {
-                id: user.id,
-                username: user.username,
-                email: user.email,
-                full_name: user.full_name,
-                phone: user.phone,
-                role_id: user.role_id,
-                role_name: user.role_id === 1 ? 'admin' : 'user'
-            }
-        };
-    }
-
-    async getProfile(userId) {
-        const user = await userRepository.findById(userId);
-        if (!user) {
-            throw new Error('User not found');
-        }
-        return user;
-    }
-
-    async updateProfile(userId, fullName, phone) {
-        await userRepository.updateProfile(userId, fullName, phone);
-        return await userRepository.findById(userId);
-    }
-
-    async updatePassword(userId, currentPassword, newPassword) {
-        // Get current password hash
-        const currentHash = await userRepository.getPasswordHash(userId);
-        if (!currentHash) {
-            throw new Error('User not found');
-        }
-
-        // Verify current password
-        const isValid = await bcrypt.compare(currentPassword, currentHash);
-        if (!isValid) {
-            throw new Error('Current password is incorrect');
-        }
-
-        // Hash new password
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(newPassword, salt);
-
-        // Update password
-        await userRepository.updatePassword(userId, hashedPassword);
-    }
-
-    async updateAvatar(userId, avatarUrl) {
-        await userRepository.updateAvatar(userId, avatarUrl);
-        return avatarUrl;
-    }
-
     async getAllUsers() {
         return await userRepository.findAll();
     }
@@ -130,36 +14,101 @@ class UserService {
         return user;
     }
 
-    async createUser(username, email, password, roleId, fullName = null, phone = null) {
+    async createUser(userData) {
+        const { username, email, password, role_id, full_name, phone } = userData;
+
+        if (!username || !email || !password) {
+            throw new Error('Username, email and password are required');
+        }
+
         const existingUser = await userRepository.findByUsername(username);
         if (existingUser) {
             throw new Error('Username already exists');
+        }
+
+        const existingEmail = await userRepository.findByEmail(email);
+        if (existingEmail) {
+            throw new Error('Email already exists');
         }
 
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
         const userId = await userRepository.create([
-            username, email, hashedPassword, roleId || 2, fullName, phone
+            username, email, hashedPassword, role_id || 2, full_name || null, phone || null
         ]);
 
-        return { id: userId, username, email, full_name: fullName, phone };
+        return { id: userId, username, email, role_id, full_name, phone };
     }
 
-    async updateUser(id, username, email, roleId, isActive) {
-        const user = await userRepository.findById(id);
-        if (!user) {
+    async updateUser(id, userData) {
+        const { username, email, role_id, full_name, phone, is_active } = userData;
+
+        const existingUser = await userRepository.findById(id);
+        if (!existingUser) {
             throw new Error('User not found');
         }
-        await userRepository.update(id, [username, email, roleId, isActive]);
+
+        const usernameTaken = await userRepository.findByUsername(username);
+        if (usernameTaken && usernameTaken.id !== parseInt(id)) {
+            throw new Error('Username already taken');
+        }
+
+        const emailTaken = await userRepository.findByEmail(email);
+        if (emailTaken && emailTaken.id !== parseInt(id)) {
+            throw new Error('Email already taken');
+        }
+
+        const affected = await userRepository.update(id, [
+            username, email, role_id, full_name || null, phone || null, is_active !== undefined ? is_active : 1
+        ]);
+
+        return affected > 0;
+    }
+
+    async updateUserPassword(id, newPassword) {
+        const existingUser = await userRepository.findById(id);
+        if (!existingUser) {
+            throw new Error('User not found');
+        }
+
+        if (!newPassword || newPassword.length < 4) {
+            throw new Error('Password must be at least 4 characters');
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+        const affected = await userRepository.updatePassword(id, hashedPassword);
+        return affected > 0;
     }
 
     async deleteUser(id) {
-        const user = await userRepository.findById(id);
-        if (!user) {
+        const existingUser = await userRepository.findById(id);
+        if (!existingUser) {
             throw new Error('User not found');
         }
-        await userRepository.softDelete(id);
+
+        const affected = await userRepository.softDelete(id);
+        return affected > 0;
+    }
+
+    async hardDeleteUser(id) {
+        const existingUser = await userRepository.findById(id);
+        if (!existingUser) {
+            throw new Error('User not found');
+        }
+
+        const affected = await userRepository.hardDelete(id);
+        return affected > 0;
+    }
+
+    async getRoles() {
+        return await userRepository.getRoles();
+    }
+
+    async getTotalUsers() {
+        return await userRepository.countUsers();
     }
 }
 

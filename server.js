@@ -46,7 +46,7 @@ const productRoutes = require('./src/routes/productRoutes');
 const categoryRoutes = require('./src/routes/categoryRoutes');
 const transactionRoutes = require('./src/routes/transactionRoutes');
 const userRoutes = require('./src/routes/userRoutes');
-const profileRoutes = require('./src/routes/profileRoutes');
+const profileRoutes = require('./src/routes/profileRoutes');  // ✅ Make sure this exists
 const supplierRoutes = require('./src/routes/supplierRoutes');
 const exportRoutes = require('./src/routes/exportRoutes');
 
@@ -58,7 +58,7 @@ app.use('/api/products', productRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/users', userRoutes);
-app.use('/api/profile', profileRoutes);
+app.use('/api/profile', profileRoutes);  // ✅ Make sure this is registered
 app.use('/api/suppliers', supplierRoutes);
 app.use('/api/export', exportRoutes);
 
@@ -87,90 +87,6 @@ app.get('/api/dashboard', async (req, res) => {
 });
 
 // ============================================
-// SIMPLE EMAIL TEST ENDPOINT (GET method for easy testing)
-// ============================================
-app.get('/api/test-email', async (req, res) => {
-    try {
-        const emailService = require('./src/services/emailService');
-        const email = req.query.email;
-        
-        if (!email) {
-            return res.status(400).json({ success: false, message: 'Email address required. Use ?email=your@email.com' });
-        }
-        
-        console.log('Sending test email to:', email);
-        const result = await emailService.sendTestEmail(email);
-        
-        if (result) {
-            res.json({ success: true, message: 'Test email sent successfully! Check your inbox.' });
-        } else {
-            res.status(500).json({ success: false, message: 'Failed to send email. Check email configuration.' });
-        }
-    } catch (error) {
-        console.error('Test email error:', error);
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
-
-// ============================================
-// POST method for test email (for compatibility)
-// ============================================
-app.post('/api/test-email', async (req, res) => {
-    try {
-        const emailService = require('./src/services/emailService');
-        const { email } = req.body;
-        
-        if (!email) {
-            return res.status(400).json({ success: false, message: 'Email address required' });
-        }
-        
-        console.log('Sending test email to:', email);
-        const result = await emailService.sendTestEmail(email);
-        
-        if (result) {
-            res.json({ success: true, message: 'Test email sent successfully! Check your inbox.' });
-        } else {
-            res.status(500).json({ success: false, message: 'Failed to send email. Check email configuration.' });
-        }
-    } catch (error) {
-        console.error('Test email error:', error);
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
-
-// ============================================
-// SIMPLE LOW STOCK ALERT TEST (GET method)
-// ============================================
-app.get('/api/test-low-stock-alert', async (req, res) => {
-    try {
-        const emailService = require('./src/services/emailService');
-        
-        const [admins] = await pool.query('SELECT email FROM users WHERE role_id = 1 LIMIT 1');
-        
-        if (admins.length === 0) {
-            return res.json({ success: false, message: 'No admin email found in database' });
-        }
-        
-        const adminEmail = admins[0].email;
-        console.log('Admin email:', adminEmail);
-        
-        const [lowStock] = await pool.query('SELECT * FROM products WHERE quantity_on_hand <= reorder_point LIMIT 1');
-        
-        if (lowStock.length === 0) {
-            return res.json({ success: false, message: 'No low stock products found' });
-        }
-        
-        console.log('Sending low stock alert for:', lowStock[0].name);
-        const result = await emailService.sendLowStockAlert(lowStock[0], adminEmail);
-        
-        res.json({ success: result, message: result ? 'Low stock alert sent!' : 'Failed to send alert' });
-    } catch (error) {
-        console.error('Low stock alert error:', error);
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
-
-// ============================================
 // HEALTH CHECK
 // ============================================
 app.get('/api/health', (req, res) => {
@@ -182,8 +98,6 @@ app.get('/', (req, res) => {
         success: true,
         message: 'Web Based Inventory Management System API',
         version: '3.0.0',
-        testEmail: 'GET /api/test-email?email=your@email.com',
-        testLowStock: 'GET /api/test-low-stock-alert',
         endpoints: {
             auth: '/api/auth',
             categories: '/api/categories',
@@ -191,14 +105,17 @@ app.get('/', (req, res) => {
             transactions: '/api/transactions',
             suppliers: '/api/suppliers',
             dashboard: '/api/dashboard',
+            users: '/api/users',
+            profile: '/api/profile',
             export: '/api/export'
         }
     });
 });
 
+// ============================================
+// START SERVER
+// ============================================
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log('🚀 Server running on http://localhost:' + PORT);
-    console.log('📧 Test email: GET http://localhost:' + PORT + '/api/test-email?email=your@email.com');
-    console.log('⚠️ Test low stock: GET http://localhost:' + PORT + '/api/test-low-stock-alert');
 });
